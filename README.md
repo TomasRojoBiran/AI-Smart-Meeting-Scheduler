@@ -23,8 +23,6 @@ A cutting-edge AI tool designed to streamline and automate meeting scheduling. I
 - Implements CRUD operations for user and meeting management.
 - Includes migration scripts to manage database schema changes.
 
-## Getting Started
-
 ### Prerequisites
 
 - Python 3.7+
