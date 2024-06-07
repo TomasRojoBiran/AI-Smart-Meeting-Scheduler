@@ -11,10 +11,14 @@ def init_nlp():
 def extract_meeting_details(email_content):
     nlp = init_nlp()
     doc = nlp(email_content)
+
     # Extract details from email content
     meeting_details = {
-        # Extracted details (for now, it's a placeholder)
-        "date": "2024-06-15",
-        "time": "10:00:00",
+        "availability": [
+            {"start": "2024-06-15T09:00:00", "end": "2024-06-15T17:00:00"}
+        ],  # Placeholder availability
+        "duration": 60,  # Duration in minutes, adjust as needed
     }
+
+    print(f"Extracted meeting details: {meeting_details}")
     return meeting_details

@@ -1,83 +1,68 @@
 from flask import Blueprint, jsonify, render_template, request
 
-from .email_gmail import fetch_gmail_email
-from .email_outlook import fetch_outlook_emails
-from .models import Meeting, User, db
+from .models import Meeting, Participant, db
 from .nlp import extract_meeting_details
 from .scheduler import schedule_meeting
 
 main = Blueprint("main", __name__)
 
 
-# Home route
 @main.route("/")
 def index():
     return render_template("index.html")
 
 
-# Schedule Meeting
 @main.route("/schedule", methods=["POST"])
 def schedule():
     email_content = request.json.get("email")
     meeting_details = extract_meeting_details(email_content)
     scheduled_time = schedule_meeting(meeting_details)
-    return jsonify({"scheduled_time": scheduled_time})
+    if scheduled_time != "No common time slot available":
+        return jsonify({"scheduled_time": f"Meeting scheduled at {scheduled_time}"})
+    else:
+        return jsonify({"scheduled_time": "No common time slot available"})
 
 
-# Fetch Gmail Emails
-@main.route("/emails/gmail", methods=["GET"])
-def gmail_emails():
-    emails = fetch_gmail_emails()
-    return jsonify({"emails": emails})
-
-
-# Fetch Outlook Emails
-@main.route("/emails/outlook", methods=["GET"])
-def outlook_emails():
-    emails = fetch_outlook_emails()
-    return jsonify({"emails": emails})
-
-
-# Create User
-@main.route("/users", methods=["POST"])
-def create_user():
+# Participant management routes
+@main.route("/participants", methods=["POST"])
+def create_participant():
     data = request.json
-    new_user = User(email=data["email"], name=data["name"])
-    db.session.add(new_user)
+    new_participant = Participant(email=data["email"], name=data["name"])
+    db.session.add(new_participant)
     db.session.commit()
-    return jsonify({"message": "User created successfully"}), 201
+    return jsonify({"message": "Participant created successfully"}), 201
 
 
-# Read Users
-@main.route("/users", methods=["GET"])
-def get_users():
-    users = User.query.all()
+@main.route("/participants", methods=["GET"])
+def get_participants():
+    participants = Participant.query.all()
     return jsonify(
-        [{"id": user.id, "email": user.email, "name": user.name} for user in users]
+        [
+            {"id": participant.id, "email": participant.email, "name": participant.name}
+            for participant in participants
+        ]
     )
 
 
-# Update User
-@main.route("/users/<int:id>", methods=["PUT"])
-def update_user(id):
+@main.route("/participants/<int:id>", methods=["PUT"])
+def update_participant(id):
     data = request.json
-    user = User.query.get_or_404(id)
-    user.email = data.get("email", user.email)
-    user.name = data.get("name", user.name)
+    participant = Participant.query.get_or_404(id)
+    participant.email = data.get("email", participant.email)
+    participant.name = data.get("name", participant.name)
     db.session.commit()
-    return jsonify({"message": "User updated successfully"})
+    return jsonify({"message": "Participant updated successfully"})
 
 
-# Delete User
-@main.route("/users/<int:id>", methods=["DELETE"])
-def delete_user(id):
-    user = User.query.get_or_404(id)
-    db.session.delete(user)
+@main.route("/participants/<int:id>", methods=["DELETE"])
+def delete_participant(id):
+    participant = Participant.query.get_or_404(id)
+    db.session.delete(participant)
     db.session.commit()
-    return jsonify({"message": "User deleted successfully"})
+    return jsonify({"message": "Participant deleted successfully"})
 
 
-# Create Meeting
+# Meeting management routes
 @main.route("/meetings", methods=["POST"])
 def create_meeting():
     data = request.json
@@ -94,7 +79,6 @@ def create_meeting():
     return jsonify({"message": "Meeting created successfully"}), 201
 
 
-# Read Meetings
 @main.route("/meetings", methods=["GET"])
 def get_meetings():
     meetings = Meeting.query.all()
@@ -114,7 +98,6 @@ def get_meetings():
     )
 
 
-# Update Meeting
 @main.route("/meetings/<int:id>", methods=["PUT"])
 def update_meeting(id):
     data = request.json
@@ -129,7 +112,6 @@ def update_meeting(id):
     return jsonify({"message": "Meeting updated successfully"})
 
 
-# Delete Meeting
 @main.route("/meetings/<int:id>", methods=["DELETE"])
 def delete_meeting(id):
     meeting = Meeting.query.get_or_404(id)

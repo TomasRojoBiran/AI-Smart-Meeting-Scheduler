@@ -7,69 +7,92 @@ from googleapiclient.discovery import build
 
 auth_gmail = Blueprint("auth_gmail", __name__)
 
-CLIENT_SECRETS_FILE = os.getenv("GMAIL_CLIENT_SECRETS_FILE")
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/calendar.readonly",
-]
-REDIRECT_URI = "http://localhost:5000/auth/gmail/callback"
+USE_MOCK_AUTH = os.getenv("USE_MOCK_AUTH", "False") == "True"
 
-flow = Flow.from_client_secrets_file(
-    CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
-)
+if USE_MOCK_AUTH:
 
+    @auth_gmail.route("/auth/gmail/login")
+    def login():
+        return jsonify({"message": "This is a mock login route for Gmail."})
 
-@auth_gmail.route("/auth/gmail/login")
-def login():
-    authorization_url, state = flow.authorization_url(
-        access_type="offline", include_granted_scopes="true"
+    @auth_gmail.route("/auth/gmail/callback")
+    def callback():
+        return jsonify({"message": "This is a mock callback route for Gmail."})
+
+    @auth_gmail.route("/auth/gmail/logout")
+    def logout():
+        return jsonify({"message": "This is a mock logout route for Gmail."})
+
+    @auth_gmail.route("/auth/gmail/test")
+    def test_gmail():
+        mock_emails = [
+            {"snippet": "Mock email 1"},
+            {"snippet": "Mock email 2"},
+            {"snippet": "Mock email 3"},
+        ]
+        return jsonify(mock_emails)
+
+else:
+    CLIENT_SECRETS_FILE = os.getenv("GMAIL_CLIENT_SECRETS_FILE")
+    SCOPES = [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/calendar.readonly",
+    ]
+    REDIRECT_URI = "http://localhost:5000/auth/gmail/callback"
+
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
-    session["state"] = state
-    return redirect(authorization_url)
 
+    @auth_gmail.route("/auth/gmail/login")
+    def login():
+        authorization_url, state = flow.authorization_url(
+            access_type="offline", include_granted_scopes="true"
+        )
+        session["state"] = state
+        return redirect(authorization_url)
 
-@auth_gmail.route("/auth/gmail/callback")
-def callback():
-    flow.fetch_token(authorization_response=request.url)
+    @auth_gmail.route("/auth/gmail/callback")
+    def callback():
+        flow.fetch_token(authorization_response=request.url)
 
-    if not session["state"] == request.args["state"]:
-        return "State does not match!", 400
+        if not session["state"] == request.args["state"]:
+            return "State does not match!", 400
 
-    credentials = flow.credentials
-    session["google_credentials"] = credentials_to_dict(credentials)
+        credentials = flow.credentials
+        session["google_credentials"] = credentials_to_dict(credentials)
 
-    return redirect(url_for("main.index"))
+        return redirect(url_for("main.index"))
 
+    @auth_gmail.route("/auth/gmail/logout")
+    def logout():
+        session.pop("google_credentials", None)
+        return redirect(url_for("main.index"))
 
-@auth_gmail.route("/auth/gmail/logout")
-def logout():
-    session.pop("google_credentials", None)
-    return redirect(url_for("main.index"))
+    @auth_gmail.route("/auth/gmail/test")
+    def test_gmail():
+        if "google_credentials" not in session:
+            return redirect("auth_gmail.login")
 
+        credentials = Credentials(**session["google_credentials"])
+        service = build("gmail", "v1", credentials=credentials)
+        results = service.users().messages().list(userId="me").execute()
+        messages = results.get("messages", [])
+        email_list = []
+        for message in messages:
+            msg = (
+                service.users().messages().get(userId="me", id=message["id"]).execute()
+            )
+            email_list.append(msg["snippet"])
 
-@auth_gmail.route("/auth/gmail/test")
-def test_gmail():
-    if "google_credentials" not in session:
-        return redirect("auth_gmail.login")
+        return jsonify(email_list)
 
-    credentials = Credentials(**session["google_credentials"])
-    service = build("gmail", "v1", credentials=credentials)
-    results = service.users().messages().list(userId="me").execute()
-    messages = results.get("messages", [])
-    email_list = []
-    for message in messages:
-        msg = service.users().messages().get(userId="me", id=message["id"]).execute()
-        email_list.append(msg["snippet"])
-
-    return jsonify(email_list)
-
-
-def credentials_to_dict(credentials):
-    return {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes,
-    }
+    def credentials_to_dict(credentials):
+        return {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+        }
